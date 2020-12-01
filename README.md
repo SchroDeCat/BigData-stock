@@ -28,6 +28,19 @@ In practice, I use the corresponding index as the risk-free baseline, and the hi
 
     where two files *nasdaqlisted.txt* and *otherlisted.txt* contain the entire list of tradeable symbols. The list is updated on a daily basis.
 
-- I used the Quandl Student Access to obtain all the needed End Of Day price for each stock.
-  
-  # BigData-stock
+- I used the Quandl Student Access to obtain all the needed End Of Day price for each stock. On the name node, I conduct the following commands to establish the necessary environment to acquire the dataset.
+
+    ```shell
+    # enter personal folder
+    cd /home/hadoop/zhangfx
+    # create virtual env
+    python -m venv ./
+    # activate python vritual environment
+    source ./bin/activate
+    # install quandl
+    pip3 install quandl
+    # fetch stock list from nasdaq ftp server to name node
+    wget ftp://ftp.nasdaqtrader.com/symboldirectory/nasdaqlisted.txt
+    # execute the python script to load latest data from quandle
+    
+    ```
