@@ -9,10 +9,17 @@ stock_codes = []
 
 # add cli parse to accept token of quandl
 cli_parser = argparse.ArgumentParser()
-cli_parser.add_argument("--token", type=str, nargs=1, help="token for accessing quandl premium data")
+cli_parser.add_argument("--num", type=int, default=0, help="how many to fetch")
+cli_parser.add_argument("--token", type=str, required=True, help="token for accessing quandl premium data")
+cli_parser.add_argument("-local", action='store_const', const=True, default=False, help="if store in local")
+cli_parser.add_argument("-s3", action='store_const', const=True, default=False, help="if store in s3, otherwise in hdfs")
 cli_args = cli_parser.parse_args()
-quandl_token = cli_args.token[0]
+quandl_token = cli_args.token
+stock_num = cli_args.num
+if_s3 = cli_args.s3
+if_local = cli_args.local
 print("Accept token ", quandl_token)
+print("Store location ", "S3" if if_s3 else "HDFS")
 
 # fetch file if not exists
 if not os.path.exists(NASDAQ):
@@ -35,8 +42,7 @@ with open(NASDAQ, 'r') as file:
         if index > 1:
             stock_codes.append(code)
 
-        if index > 3:
-        # if not stock_line:
+        if (not stock_line and not stock_num) or (stock_num and index > stock_num):
             break
         
     print("Finish Reading {} stocks ".format(index))
@@ -47,12 +53,18 @@ for code in tqdm.tqdm(stock_codes, desc="Loading Stocks from Quandl", unit="file
     # 1. fetch to name node
     # quandl.get("EOD/{}".format(code), authtoken=quandl_token)  
     
-    # 2. test on local                                       
-    # os.system(f"curl -s {QUANDL_EOD_API}{code}.csv?api_key={quandl_token} > {code}.csv")              
+    # 2. test on local
+    if if_local:                                
+        os.system(f"curl -s {QUANDL_EOD_API}{code}.csv?api_key={quandl_token} > {code}.csv")              
     
     # 3. Directly to hdfs /tmp/zhangfx
-    # os.system(f"curl -s {QUANDL_EOD_API}{code}.csv?api_key={quandl_token} | hdfs dfs -put /tmp/zhangfx/{code}.csv")  
+    elif not if_s3:
+        os.system(f"curl -s {QUANDL_EOD_API}{code}.csv?api_key={quandl_token} | hdfs dfs -put /tmp/zhangfx/{code}.csv")  
     
     # 4. Directly to S3 zhangfx-mpcs53014/stocks
-    # os.system(f"curl -s {QUANDL_EOD_API}{code}.csv?api_key={quandl_token} | aws s3 cp - s3://zhangfx-mpcs53014/stocks/{code}.csv")  
-
+    elif if_s3:
+        os.system(f"curl -s {QUANDL_EOD_API}{code}.csv?api_key={quandl_token} | aws s3 cp - s3://zhangfx-mpcs53014/stocks/{code}.csv") 
+    
+    # exit
+    else:
+        break
