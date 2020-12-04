@@ -68,3 +68,12 @@ for code in tqdm.tqdm(stock_codes, desc="Loading Stocks from Quandl", unit="file
     # exit
     else:
         break
+
+# fetch index value
+if if_local:
+    os.system(f"curl -s https://www.quandl.com/api/v3/datasets/NASDAQOMX/NDX.csv\?api_key={quandl_token}  > NDX.csv")
+# 3. Directly to hdfs /tmp/zhangfx
+elif not if_s3:
+    os.system(f"curl -s https://www.quandl.com/api/v3/datasets/NASDAQOMX/NDX.csv\?api_key={quandl_token}  | hdfs dfs -put /tmp/zhangfx/NDX.csv")
+elif if_s3:
+    os.system(f"curl -s https://www.quandl.com/api/v3/datasets/NASDAQOMX/NDX.csv?api_key={quandl_token} | aws s3 cp - s3://zhangfx-mpcs53014/indices/NDX.csv") 
