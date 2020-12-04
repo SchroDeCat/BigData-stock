@@ -47,17 +47,58 @@ In practice, I use the corresponding index as the risk-free baseline, and the hi
 
     The total size for all nasdaq EOD historical data is about 1.1GB.
 
-- I used the following hive command to create a hive table to manage all csv files stored in S3 ***zhangfx_final***:
+- I used the following hive command to create a hive table to manage all csv files stored in S3 ***zhangfx_final*** and ***zhangfx_final_index***:
   
     ```sql
     DROP TABLE IF EXISTS zhangfx_final;
     CREATE EXTERNAL TABLE zhangfx_final (trade_day DATE,
-        open float, high float, low float, 
+        open float, high float, low float,
         close float, volume float, dividend float, split float,
         adj_Open float, adj_High float, adj_Low float, adj_Close float, adj_Volume float)
     ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
     LOCATION 's3://zhangfx-mpcs53014/stocks/'
     TBLPROPERTIES ("skip.header.line.count"="1");
+
+    DROP TABLE IF EXISTS zhangfx_final_index;
+    CREATE EXTERNAL TABLE zhangfx_final_index (trade_day Date,
+        Index_Value float, High float, Low float,
+        Total_Market_Value float, Dividend_Market_Value float)
+    ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+    LOCATION 's3://zhangfx-mpcs53014/indices/'
+    TBLPROPERTIES ("skip.header.line.count"="1");
+
     ```
 
-# Batch Layer
+## 2. Batch Layer
+
+First, create a new table in hbase.
+
+```shell
+# one table for both index and stocks
+create 'zhangfx_final_view', 'price'
+create 'zhangfx_final_summary', 'result'
+```
+
+Second, use hive to extract all EOD of stocks and index value of index. Use the input_file_name + date as key.
+
+```sql
+-- create external table
+create external table zhangfx_final_view (
+    name_day        string,
+    value_of_day    float
+    ) STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ('hbase.columns.mapping' = ':key, price:value_of_day')
+TBLPROPERTIES ('hbase.table.name' = 'zhangfx_final_view');
+
+-- insert data from stocks
+insert overwrite table zhangfx_final_view
+    select concat(split(split( zhangfx_final.INPUT__FILE__NAME, '/')[4],'[.]')[0], trade_day), adj_Close from zhangfx_final where adj_Close != '';
+
+-- insert data from index
+insert overwrite table zhangfx_final_view
+    select concat(split(split( zhangfx_final_index.INPUT__FILE__NAME, '/')[4],'[.]')[0], trade_day), Index_Value from zhangfx_final_index where Index_Value != '';
+```
+
+## 3. Serving Layer
+
+
