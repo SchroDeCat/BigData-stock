@@ -69,13 +69,12 @@ In practice, I use the corresponding index as the risk-free baseline, and the hi
 
     ```
 
-## 2. Batch Layer
+## 2. Batch Layer & Serving Layer
 
 First, create a new table in hbase.
 
 ```shell
 # one table for both index and stocks
-create 'zhangfx_final_view', 'price'
 create 'zhangfx_final_summary', 'result'
 ```
 
@@ -83,22 +82,57 @@ Second, use hive to extract all EOD of stocks and index value of index. Use the 
 
 ```sql
 -- create external table
-create external table zhangfx_final_view (
-    name_day        string,
-    value_of_day    float
+create external table zhangfx_final_summary (
+    stock_name      string,
+    num_days        bigint,
+    value_avg       float,
+    value_std       float,
+    start_day_index float,
+    end_day_index   float,
+    start_day_stock float,
+    end_day_stock   float
     ) STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
-WITH SERDEPROPERTIES ('hbase.columns.mapping' = ':key, price:value_of_day')
-TBLPROPERTIES ('hbase.table.name' = 'zhangfx_final_view');
+WITH SERDEPROPERTIES ('hbase.columns.mapping' = ':key,
+            result:num_days,
+            result:value_avg,
+            result:value_std,
+            result:start_day_index,
+            result:end_day_index,
+            result:start_day_stock,
+            result:end_day_stock
+            ')
+TBLPROPERTIES ('hbase.table.name' = 'zhangfx_final_summary');
+
+-- create intermediate
+create table zhangfx_final_view (
+    stock_name      string,
+    trade_day       Date,
+    value_of_day    float,
+    index_of_day    float
+) STORED AS ORC;
 
 -- insert data from stocks
 insert overwrite table zhangfx_final_view
-    select concat(split(split( zhangfx_final.INPUT__FILE__NAME, '/')[4],'[.]')[0], trade_day), adj_Close from zhangfx_final where adj_Close != '';
+    select split(split( zhangfx_final.INPUT__FILE__NAME, '/')[4],'[.]')[0] as stock_name,
+        zhangfx_final.trade_day as trade_day,
+        zhangfx_final.adj_close as value_of_day,
+        zhangfx_final_index.Index_Value as index_of_day
+    from zhangfx_final join zhangfx_final_index on zhangfx_final.trade_day = zhangfx_final_index.trade_day
+    where zhangfx_final.adj_Close != '' and zhangfx_final_index.Index_Value != '';
 
--- insert data from index
-insert overwrite table zhangfx_final_view
-    select concat(split(split( zhangfx_final_index.INPUT__FILE__NAME, '/')[4],'[.]')[0], trade_day), Index_Value from zhangfx_final_index where Index_Value != '';
+-- insert batch view into hbase
+insert overwrite table zhangfx_final_summary
+    select a.stock_name as stock_name, c.num_days as num_days,
+    c.value_avg as value_avg, c.value_std as value_std,
+    a.value_of_day as start_day_stock, a.index_of_day as start_day_index,
+    b.value_of_day as end_day_stock, b.index_of_day as end_day_index
+
+    from zhangfx_final_view as a, zhangfx_final_view as b, (select stock_name, count(trade_day) as num_days,
+                                    min(trade_day) as start_day, max(trade_day) as end_day,
+                                    avg(value_of_day) as value_avg, std(value_of_day) as value_std
+                                    from zhangfx_final_view group by stock_name) as c
+    where (a.trade_day = c.start_day and b.trade_day = c.end_day and a.stock_name = c.stock_name and b.stock_name = c.stock_name);
 ```
 
-## 3. Serving Layer
-
+## 3. Webapplication
 
