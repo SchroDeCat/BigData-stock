@@ -82,6 +82,17 @@ Second, use hive to extract all EOD of stocks and index value of index. Use the 
 
 ```sql
 -- create external table
+create  table zhangfx_final_summary_test (
+    stock_name      string,
+    num_days        bigint,
+    value_avg       float,
+    value_std       float,
+    start_day_index float,
+    end_day_index   float,
+    start_day_stock float,
+    end_day_stock   float
+    );
+
 create external table zhangfx_final_summary (
     stock_name      string,
     num_days        bigint,
@@ -109,7 +120,16 @@ create table zhangfx_final_view (
     trade_day       Date,
     value_of_day    float,
     index_of_day    float
-) STORED AS ORC;
+);
+
+create table zhangfx_final_view2(
+    stock_name      string,
+    num_days        bigint,
+    start_day       Date,
+    end_day         date,
+    value_avg       float,
+    value_std       float
+);
 
 -- insert data from stocks
 insert overwrite table zhangfx_final_view
@@ -120,18 +140,23 @@ insert overwrite table zhangfx_final_view
     from zhangfx_final join zhangfx_final_index on zhangfx_final.trade_day = zhangfx_final_index.trade_day
     where zhangfx_final.adj_Close != '' and zhangfx_final_index.Index_Value != '';
 
--- insert batch view into hbase
-insert overwrite table zhangfx_final_summary
-    select a.stock_name as stock_name, c.num_days as num_days,
-    c.value_avg as value_avg, c.value_std as value_std,
-    a.value_of_day as start_day_stock, a.index_of_day as start_day_index,
-    b.value_of_day as end_day_stock, b.index_of_day as end_day_index
-
-    from zhangfx_final_view as a, zhangfx_final_view as b, (select stock_name, count(trade_day) as num_days,
+insert overwrite table zhangfx_final_view2
+   select stock_name, count(trade_day) as num_days,
                                     min(trade_day) as start_day, max(trade_day) as end_day,
                                     avg(value_of_day) as value_avg, std(value_of_day) as value_std
-                                    from zhangfx_final_view group by stock_name) as c
+                                    from zhangfx_final_view group by stock_name;
+
+-- insert batch view into hbase
+insert into table zhangfx_final_summary
+    select a.stock_name as stock_name, c.num_days as num_days,
+    c.value_avg as value_avg, c.value_std as value_std,
+    a.index_of_day as start_day_index, b.index_of_day as end_day_index,
+    a.value_of_day as start_day_stock, b.value_of_day as end_day_stock
+
+    from zhangfx_final_view as a, zhangfx_final_view as b, zhangfx_final_view2 as c
     where (a.trade_day = c.start_day and b.trade_day = c.end_day and a.stock_name = c.stock_name and b.stock_name = c.stock_name);
+
+select count(distinct stock_name) from zhangfx_final_summary;
 ```
 
 ## 3. Webapplication
