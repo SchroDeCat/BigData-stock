@@ -6,7 +6,7 @@ By Fengxue Zhang
 
 User type in the stock name on the webpage, the application return the historical ***Sharpe Ratio*** (reward-to-variability ratio), one of the most popular measure for the performance of mutual funds proposed in (Sharpe [1966](http://web.stanford.edu/~wfsharpe/art/sr/SR.htm#Sharpe66)). Recently the stock market has been gainning popularity for individual investors. I hope the application could provide the ***query service for single stock*** first, and develop the extensive service in the future work.
 
-Sharpe ratio is a risk-adjusted return on an investment or portfolio. Usually, any Sharpe ratio greater than 1.0 is considered acceptable to good by investors. A ratio higher than 2.0 is rated as very good. A ratio of 3.0 or higher is considered excellent. A ratio under 1.0 is considered sub-optimal. The formula is:
+<!-- Sharpe ratio is a risk-adjusted return on an investment or portfolio. Usually, any Sharpe ratio greater than 1.0 is considered acceptable to good by investors. A ratio higher than 2.0 is rated as very good. A ratio of 3.0 or higher is considered excellent. A ratio under 1.0 is considered sub-optimal. The formula is: -->
 
 $$Sharpe\ Ratio = \frac{R_p-R_f}{\sigma_p}$$
 
@@ -96,12 +96,12 @@ create  table zhangfx_final_summary_test (
 create external table zhangfx_final_summary (
     stock_name      string,
     num_days        bigint,
-    value_avg       float,
-    value_std       float,
-    start_day_index float,
-    end_day_index   float,
-    start_day_stock float,
-    end_day_stock   float
+    value_avg       double,
+    value_std       double,
+    start_day_index double,
+    end_day_index   double,
+    start_day_stock double,
+    end_day_stock   double
     ) STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
 WITH SERDEPROPERTIES ('hbase.columns.mapping' = ':key,
             result:num_days,
@@ -127,8 +127,8 @@ create table zhangfx_final_view2(
     num_days        bigint,
     start_day       Date,
     end_day         date,
-    value_avg       float,
-    value_std       float
+    value_avg       double,
+    value_std       double
 );
 
 -- insert data from stocks
@@ -142,9 +142,9 @@ insert overwrite table zhangfx_final_view
 
 insert overwrite table zhangfx_final_view2
    select stock_name, count(trade_day) as num_days,
-                                    min(trade_day) as start_day, max(trade_day) as end_day,
-                                    avg(value_of_day) as value_avg, std(value_of_day) as value_std
-                                    from zhangfx_final_view group by stock_name;
+        min(trade_day) as start_day, max(trade_day) as end_day,
+        avg(value_of_day) as value_avg, std(value_of_day) as value_std
+        from zhangfx_final_view group by stock_name;
 
 -- insert batch view into hbase
 insert into table zhangfx_final_summary
