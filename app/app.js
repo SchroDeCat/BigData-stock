@@ -19,40 +19,40 @@ function rowToMap(row) {
 	return stats;
 }
 
-hclient.table('weather_delays_by_route').row('ORDAUS').get((error, value) => {
+hclient.table('zhangfx_final_summary').row('AAME').get((error, value) => {
 	console.info(rowToMap(value))
 	console.info(value)
 })
 
 
 app.use(express.static('public'));
-app.get('/delays.html',function (req, res) {
-    const route=req.query['origin'] + req.query['dest'];
-    console.log(route);
-	hclient.table('weather_delays_by_route').row(route).get(function (err, cells) {
-		const weatherInfo = rowToMap(cells);
-		console.log(weatherInfo)
-		function weather_delay(weather) {
-			var flights = weatherInfo["delay:" + weather + "_flights"];
-			var delays = weatherInfo["delay:" + weather + "_delays"];
-			if(flights == 0)
-				return " - ";
-			return (delays/flights).toFixed(1); /* One decimal place */
+app.get('/price.html',function (req, res) {
+    const stock=req.query['stock'];
+    console.log(stock);
+	hclient.table('zhangfx_final_summary').row(stock).get(function (err, cells) {
+		try {
+			const stockInfo = rowToMap(cells);
+			console.log(stockInfo)
+			function sharpe_ratio() {
+				var baseReturn = (stockInfo["result:end_day_index"] - stockInfo["result:start_day_index"]) / stockInfo["result:start_day_index"] - 1;
+				var stockReturn = (stockInfo["result:end_day_stock"] - stockInfo["result:start_day_stock"]) / stockInfo["result:start_day_stock"] - 1;
+				var risk = stockInfo["result:value_std"]
+				if(risk == 0)
+					return " inf ";
+				return ((stockReturn - baseReturn)/risk).toFixed(2); /* two decimal place */
+			}
+
+			var template = filesystem.readFileSync("result.mustache").toString();
+			var html = mustache.render(template,  {
+				stock : req.query['stock'],
+				num_days: stockInfo["result:num_days"],
+				ratio: sharpe_ratio(),
+			});
+			res.send(html);
+		} catch (e) {
+			console.log(e)
 		}
 
-		var template = filesystem.readFileSync("result.mustache").toString();
-		var html = mustache.render(template,  {
-			origin : req.query['origin'],
-			dest : req.query['dest'],
-			clear_dly : weather_delay("clear"),
-			fog_dly : weather_delay("fog"),
-			rain_dly : weather_delay("rain"),
-			snow_dly : weather_delay("snow"),
-			hail_dly : weather_delay("hail"),
-			thunder_dly : weather_delay("thunder"),
-			tornado_dly : weather_delay("tornado")
-		});
-		res.send(html);
 	});
 });
 	
